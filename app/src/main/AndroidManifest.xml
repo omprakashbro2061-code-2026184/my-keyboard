@@ -1,6 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="com.example.keyboard">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <application
         android:allowBackup="false"
@@ -13,7 +12,7 @@
             android:exported="true"
             android:permission="android.permission.BIND_INPUT_METHOD">
             <intent-filter>
-                <action android:name="android.view.InputMethod" />
+                <action android:name="android.name.InputMethod" />
             </intent-filter>
             <meta-data
                 android:name="android.view.im"
