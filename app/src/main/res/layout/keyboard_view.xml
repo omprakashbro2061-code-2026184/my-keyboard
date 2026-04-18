@@ -8,4 +8,8 @@
     android:keyPreviewLayout="@null"
     android:background="#1A1A2E"
     android:keyTextColor="#FFFFFF"
-    android:keyBackground="@drawable/key_background" />
+    android:keyTextSize="16sp"
+    android:labelTextSize="14sp"
+    android:keyBackground="@drawable/key_background"
+    android:shadowColor="#000000"
+    android:shadowRadius="2.0" />
