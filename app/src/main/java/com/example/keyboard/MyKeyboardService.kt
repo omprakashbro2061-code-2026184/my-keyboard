@@ -8,22 +8,14 @@ import android.view.View
 class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionListener {
 
     private lateinit var keyboardView: KeyboardView
-    private lateinit var lettersKeyboard: Keyboard
-    private lateinit var symbolsKeyboard: Keyboard
+    private lateinit var keyboard: Keyboard
     private var isCaps = false
     private var isSymbols = false
 
-    companion object {
-        const val CODE_SPACE = 32
-        const val CODE_TOGGLE = 100500
-        const val CODE_SYMBOLS2 = 100501
-    }
-
     override fun onCreateInputView(): View {
         keyboardView = layoutInflater.inflate(R.layout.keyboard_view, null) as KeyboardView
-        lettersKeyboard = Keyboard(this, R.xml.keys_letters)
-        symbolsKeyboard = Keyboard(this, R.xml.keys_symbols)
-        keyboardView.keyboard = lettersKeyboard
+        keyboard = Keyboard(this, R.xml.keys_letters)
+        keyboardView.keyboard = keyboard
         keyboardView.setOnKeyboardActionListener(this)
         keyboardView.isPreviewEnabled = false
         return keyboardView
@@ -33,52 +25,36 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
         val ic = currentInputConnection ?: return
 
         when (primaryCode) {
-
-            Keyboard.KEYCODE_DELETE -> {
-                val selectedText = ic.getSelectedText(0)
-                if (selectedText.isNullOrEmpty()) {
-                    ic.deleteSurroundingText(1, 0)
-                } else {
-                    ic.commitText("", 1)
-                }
+            -5, Keyboard.KEYCODE_DELETE -> {
+                ic.deleteSurroundingText(1, 0)
             }
-
-            Keyboard.KEYCODE_SHIFT -> {
+            -1, Keyboard.KEYCODE_SHIFT -> {
                 isCaps = !isCaps
-                lettersKeyboard.isShifted = isCaps
+                keyboard.isShifted = isCaps
                 keyboardView.invalidateAllKeys()
             }
-
-            Keyboard.KEYCODE_DONE -> {
+            10 -> {
                 ic.commitText("\n", 1)
             }
-
-            CODE_SPACE -> {
+            32 -> {
                 ic.commitText(" ", 1)
             }
-
-            CODE_TOGGLE -> {
-                isSymbols = true
-                keyboardView.keyboard = symbolsKeyboard
-            }
-
-            CODE_SYMBOLS2 -> {
-                isSymbols = false
-                keyboardView.keyboard = lettersKeyboard
-                isCaps = false
-                lettersKeyboard.isShifted = false
-                keyboardView.invalidateAllKeys()
-            }
-
-            else -> {
-                var char = primaryCode.toChar()
-                if (!isSymbols && isCaps) {
-                    char = char.uppercaseChar()
+            100500 -> {
+                isSymbols = !isSymbols
+                keyboard = if (isSymbols) {
+                    Keyboard(this, R.xml.keys_symbols)
+                } else {
+                    Keyboard(this, R.xml.keys_letters)
                 }
-                ic.commitText(char.toString(), 1)
-                if (!isSymbols && isCaps) {
+                keyboardView.keyboard = keyboard
+            }
+            else -> {
+                var code = primaryCode.toChar()
+                if (isCaps) code = code.uppercaseChar()
+                ic.commitText(code.toString(), 1)
+                if (isCaps) {
                     isCaps = false
-                    lettersKeyboard.isShifted = false
+                    keyboard.isShifted = false
                     keyboardView.invalidateAllKeys()
                 }
             }
