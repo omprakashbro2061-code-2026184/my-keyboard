@@ -15,13 +15,12 @@ android {
         versionName "1.0"
     }
 
-    // ✅ THIS ALIGNS THE JAVA VERSION
+    // Ensures Java and Kotlin both use Version 17
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
     }
 
-    // ✅ THIS ALIGNS THE KOTLIN VERSION
     kotlinOptions {
         jvmTarget = "17"
     }
