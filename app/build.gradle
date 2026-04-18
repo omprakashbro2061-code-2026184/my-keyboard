@@ -2,9 +2,11 @@ plugins {
     id 'com.android.application'
     id 'org.jetbrains.kotlin.android'
 }
+
 android {
     namespace 'com.example.keyboard'
     compileSdk 34
+
     defaultConfig {
         applicationId "com.example.keyboard"
         minSdk 21
@@ -12,7 +14,15 @@ android {
         versionCode 1
         versionName "1.0"
     }
+    
+    buildTypes {
+        release {
+            minifyEnabled false
+        }
+    }
 }
+
 dependencies {
     implementation 'androidx.appcompat:appcompat:1.6.1'
+    implementation 'com.google.android.material:material:1.9.0'
 }
