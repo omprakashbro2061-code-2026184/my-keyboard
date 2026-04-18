@@ -17,6 +17,9 @@ jobs:
       - name: Build APK
         run: |
           chmod +x gradlew
+          # This line fixes the "Unable to access jarfile" error by downloading the missing file
+          mkdir -p gradle/wrapper
+          wget https://raw.githubusercontent.com/gradle/gradle/master/gradle/wrapper/gradle-wrapper.jar -P gradle/wrapper/
           ./gradlew assembleDebug
 
       - name: Upload APK
