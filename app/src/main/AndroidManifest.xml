@@ -1,22 +1,27 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.example.keyboard">
 
     <application
         android:allowBackup="false"
         android:label="Private Keyboard"
         android:supportsRtl="true"
-        android:theme="@style/Theme.AppCompat">
+        android:theme="@style/Theme.AppCompat.NoActionBar">
 
         <service
             android:name=".MyKeyboardService"
+            android:label="Private Keyboard"
             android:exported="true"
             android:permission="android.permission.BIND_INPUT_METHOD">
+
             <intent-filter>
-                <action android:name="android.name.InputMethod" />
+                <action android:name="android.view.InputMethod" />
             </intent-filter>
+
             <meta-data
                 android:name="android.view.im"
                 android:resource="@xml/method" />
+
         </service>
 
     </application>
