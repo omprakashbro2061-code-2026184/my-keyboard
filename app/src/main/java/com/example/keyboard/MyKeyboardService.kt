@@ -4,7 +4,6 @@ import android.inputmethodservice.InputMethodService
 import android.inputmethodservice.KeyboardView
 import android.inputmethodservice.Keyboard
 import android.view.View
-import android.view.inputmethod.EditorInfo
 
 class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionListener {
 
@@ -24,7 +23,6 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
 
     override fun onKey(primaryCode: Int, keyCodes: IntArray?) {
         val ic = currentInputConnection ?: return
-
         when (primaryCode) {
             Keyboard.KEYCODE_DELETE -> {
                 ic.deleteSurroundingText(1, 0)
@@ -35,9 +33,12 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
                 keyboardView.invalidateAllKeys()
             }
             Keyboard.KEYCODE_DONE -> {
-                ic.performEditorAction(EditorInfo.IME_ACTION_DONE)
+                ic.commitText("\n", 1)
             }
-            -2 -> {
+            32 -> {
+                ic.commitText(" ", 1)
+            }
+            100500 -> {
                 isSymbols = !isSymbols
                 keyboard = if (isSymbols) {
                     Keyboard(this, R.xml.keys_symbols)
@@ -45,9 +46,6 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
                     Keyboard(this, R.xml.keys_letters)
                 }
                 keyboardView.keyboard = keyboard
-            }
-            -3 -> {
-                ic.commitText(" ", 1)
             }
             else -> {
                 var code = primaryCode.toChar()
