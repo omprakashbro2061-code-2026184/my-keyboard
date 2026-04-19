@@ -4,10 +4,12 @@ import android.content.Context
 import android.inputmethodservice.InputMethodService
 import android.inputmethodservice.Keyboard
 import android.inputmethodservice.KeyboardView
+import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
-import android.os.Build
 import android.text.InputType
 import android.view.View
 import android.view.inputmethod.EditorInfo
@@ -17,8 +19,23 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
     private lateinit var keyboardView: KeyboardView
     private lateinit var keyboard: Keyboard
     private var isCaps = false
+    private var isCapsLock = false
     private var isSymbols = false
+    private var isEmoji = false
     private var vibrator: Vibrator? = null
+    private var lastShiftTime = 0L
+    private var lastSpaceTime = 0L
+    private var deleteHandler = Handler(Looper.getMainLooper())
+    private var isDeleting = false
+
+    private val deleteRunnable = object : Runnable {
+        override fun run() {
+            try {
+                currentInputConnection?.deleteSurroundingText(1, 0)
+                deleteHandler.postDelayed(this, 50)
+            } catch (e: Exception) {}
+        }
+    }
 
     override fun onCreate() {
         super.onCreate()
@@ -30,9 +47,7 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
                 @Suppress("DEPRECATION")
                 getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
             }
-        } catch (e: Exception) {
-            vibrator = null
-        }
+        } catch (e: Exception) { vibrator = null }
     }
 
     override fun onCreateInputView(): View {
@@ -43,16 +58,16 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
             keyboardView.setOnKeyboardActionListener(this)
             keyboardView.isPreviewEnabled = false
             keyboardView
-        } catch (e: Exception) {
-            KeyboardView(this, null)
-        }
+        } catch (e: Exception) { KeyboardView(this, null) }
     }
 
     override fun onStartInputView(info: EditorInfo, restarting: Boolean) {
         super.onStartInputView(info, restarting)
         try {
             isSymbols = false
+            isEmoji = false
             isCaps = false
+            isCapsLock = false
             keyboard = Keyboard(this, R.xml.keys_letters)
             keyboardView.keyboard = keyboard
             keyboardView.invalidateAllKeys()
@@ -62,25 +77,31 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
     private fun vibrate() {
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                vibrator?.vibrate(VibrationEffect.createOneShot(30, VibrationEffect.DEFAULT_AMPLITUDE))
+                vibrator?.vibrate(VibrationEffect.createOneShot(25, VibrationEffect.DEFAULT_AMPLITUDE))
             } else {
                 @Suppress("DEPRECATION")
-                vibrator?.vibrate(30)
+                vibrator?.vibrate(25)
             }
         } catch (e: Exception) {}
     }
 
-    private fun isPasswordField(): Boolean {
-        return try {
-            val inputType = currentInputEditorInfo?.inputType ?: return false
-            val variation = inputType and InputType.TYPE_MASK_VARIATION
-            variation == InputType.TYPE_TEXT_VARIATION_PASSWORD ||
-            variation == InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD ||
-            variation == InputType.TYPE_TEXT_VARIATION_WEB_PASSWORD ||
-            variation == InputType.TYPE_NUMBER_VARIATION_PASSWORD
-        } catch (e: Exception) {
-            false
-        }
+    private fun autoCapitalize() {
+        try {
+            val ic = currentInputConnection ?: return
+            val text = ic.getTextBeforeCursor(2, 0) ?: return
+            if (text.isEmpty()) {
+                isCaps = true
+                keyboard.isShifted = true
+                keyboardView.invalidateAllKeys()
+                return
+            }
+            val last = text.last()
+            if (last == '.' || last == '!' || last == '?') {
+                isCaps = true
+                keyboard.isShifted = true
+                keyboardView.invalidateAllKeys()
+            }
+        } catch (e: Exception) {}
     }
 
     override fun onKey(primaryCode: Int, keyCodes: IntArray?) {
@@ -89,32 +110,58 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
             vibrate()
 
             when (primaryCode) {
+
                 -5, Keyboard.KEYCODE_DELETE -> {
-                    val selectedText = ic.getSelectedText(0)
-                    if (selectedText.isNullOrEmpty()) {
-                        ic.deleteSurroundingText(1, 0)
-                    } else {
+                    val selected = ic.getSelectedText(0)
+                    if (!selected.isNullOrEmpty()) {
                         ic.commitText("", 1)
+                    } else {
+                        ic.deleteSurroundingText(1, 0)
                     }
                 }
+
                 -1, Keyboard.KEYCODE_SHIFT -> {
-                    isCaps = !isCaps
+                    val now = System.currentTimeMillis()
+                    if (now - lastShiftTime < 300) {
+                        isCapsLock = !isCapsLock
+                        isCaps = isCapsLock
+                    } else {
+                        if (!isCapsLock) {
+                            isCaps = !isCaps
+                        }
+                    }
+                    lastShiftTime = now
                     keyboard.isShifted = isCaps
                     keyboardView.invalidateAllKeys()
                 }
+
                 10 -> {
                     val action = currentInputEditorInfo?.imeOptions?.and(EditorInfo.IME_MASK_ACTION)
-                    if (action != null && action != EditorInfo.IME_ACTION_NONE) {
+                    if (action != null && action != EditorInfo.IME_ACTION_NONE && action != EditorInfo.IME_ACTION_UNSPECIFIED) {
                         ic.performEditorAction(action)
                     } else {
                         ic.commitText("\n", 1)
                     }
                 }
+
                 32 -> {
-                    ic.commitText(" ", 1)
+                    val now = System.currentTimeMillis()
+                    if (now - lastSpaceTime < 300) {
+                        ic.deleteSurroundingText(1, 0)
+                        ic.commitText(". ", 1)
+                        isCaps = true
+                        keyboard.isShifted = true
+                        keyboardView.invalidateAllKeys()
+                    } else {
+                        ic.commitText(" ", 1)
+                        autoCapitalize()
+                    }
+                    lastSpaceTime = now
                 }
+
                 100500 -> {
                     isSymbols = !isSymbols
+                    isEmoji = false
                     keyboard = if (isSymbols) {
                         Keyboard(this, R.xml.keys_symbols)
                     } else {
@@ -122,24 +169,54 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
                     }
                     keyboardView.keyboard = keyboard
                 }
+
+                100600 -> {
+                    isEmoji = !isEmoji
+                    isSymbols = false
+                    keyboard = if (isEmoji) {
+                        Keyboard(this, R.xml.keys_emoji)
+                    } else {
+                        Keyboard(this, R.xml.keys_letters)
+                    }
+                    keyboardView.keyboard = keyboard
+                }
+
                 else -> {
                     var code = primaryCode.toChar()
-                    if (isCaps && !isPasswordField()) {
+                    if ((isCaps || isCapsLock) && code.isLetter()) {
                         code = code.uppercaseChar()
                     }
                     ic.commitText(code.toString(), 1)
-                    if (isCaps) {
+                    if (isCaps && !isCapsLock) {
                         isCaps = false
                         keyboard.isShifted = false
                         keyboardView.invalidateAllKeys()
                     }
+                    autoCapitalize()
                 }
             }
         } catch (e: Exception) {}
     }
 
-    override fun onPress(primaryCode: Int) {}
-    override fun onRelease(primaryCode: Int) {}
+    override fun onPress(primaryCode: Int) {
+        if (primaryCode == -5 || primaryCode == Keyboard.KEYCODE_DELETE) {
+            isDeleting = true
+            deleteHandler.postDelayed(deleteRunnable, 400)
+        }
+    }
+
+    override fun onRelease(primaryCode: Int) {
+        if (primaryCode == -5 || primaryCode == Keyboard.KEYCODE_DELETE) {
+            isDeleting = false
+            deleteHandler.removeCallbacks(deleteRunnable)
+        }
+    }
+
+    override fun onDestroy() {
+        deleteHandler.removeCallbacks(deleteRunnable)
+        super.onDestroy()
+    }
+
     override fun onText(text: CharSequence?) {}
     override fun swipeDown() {}
     override fun swipeLeft() {}
