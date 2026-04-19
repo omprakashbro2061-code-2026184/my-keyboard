@@ -18,7 +18,7 @@
         <Key android:codes="112" android:keyLabel="p" android:keyEdgeFlags="right"/>
     </Row>
 
-    <Row android:keyboardMode="0">
+    <Row>
         <Key android:codes="97" android:keyLabel="a" android:keyEdgeFlags="left" android:horizontalGap="5%p"/>
         <Key android:codes="115" android:keyLabel="s"/>
         <Key android:codes="100" android:keyLabel="d"/>
