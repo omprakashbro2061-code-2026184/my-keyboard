@@ -2,3 +2,4 @@
 -keep class android.inputmethodservice.** { *; }
 -keepattributes *Annotation*
 -dontwarn android.inputmethodservice.**
+-dontwarn kotlin.**
