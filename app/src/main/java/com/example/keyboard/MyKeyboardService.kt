@@ -22,11 +22,11 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
     private var isCapsLock = false
     private var isSymbols = false
     private var isEmoji = false
+    private var isKaomoji = false
     private var vibrator: Vibrator? = null
     private var lastShiftTime = 0L
     private var lastSpaceTime = 0L
-    private var deleteHandler = Handler(Looper.getMainLooper())
-    private var isDeleting = false
+    private val deleteHandler = Handler(Looper.getMainLooper())
 
     private val deleteRunnable = object : Runnable {
         override fun run() {
@@ -66,6 +66,7 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
         try {
             isSymbols = false
             isEmoji = false
+            isKaomoji = false
             isCaps = false
             isCapsLock = false
             keyboard = Keyboard(this, R.xml.keys_letters)
@@ -104,13 +105,30 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
         } catch (e: Exception) {}
     }
 
+    private fun switchToLetters() {
+        isSymbols = false
+        isEmoji = false
+        isKaomoji = false
+        keyboard = Keyboard(this, R.xml.keys_letters)
+        keyboardView.keyboard = keyboard
+    }
+
+    override fun onText(text: CharSequence?) {
+        try {
+            val ic = currentInputConnection ?: return
+            if (!text.isNullOrEmpty()) {
+                ic.commitText(text, 1)
+                vibrate()
+            }
+        } catch (e: Exception) {}
+    }
+
     override fun onKey(primaryCode: Int, keyCodes: IntArray?) {
         try {
             val ic = currentInputConnection ?: return
             vibrate()
 
             when (primaryCode) {
-
                 -5, Keyboard.KEYCODE_DELETE -> {
                     val selected = ic.getSelectedText(0)
                     if (!selected.isNullOrEmpty()) {
@@ -126,9 +144,7 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
                         isCapsLock = !isCapsLock
                         isCaps = isCapsLock
                     } else {
-                        if (!isCapsLock) {
-                            isCaps = !isCaps
-                        }
+                        if (!isCapsLock) isCaps = !isCaps
                     }
                     lastShiftTime = now
                     keyboard.isShifted = isCaps
@@ -162,6 +178,7 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
                 100500 -> {
                     isSymbols = !isSymbols
                     isEmoji = false
+                    isKaomoji = false
                     keyboard = if (isSymbols) {
                         Keyboard(this, R.xml.keys_symbols)
                     } else {
@@ -173,8 +190,21 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
                 100600 -> {
                     isEmoji = !isEmoji
                     isSymbols = false
+                    isKaomoji = false
                     keyboard = if (isEmoji) {
                         Keyboard(this, R.xml.keys_emoji)
+                    } else {
+                        Keyboard(this, R.xml.keys_letters)
+                    }
+                    keyboardView.keyboard = keyboard
+                }
+
+                100700 -> {
+                    isKaomoji = !isKaomoji
+                    isSymbols = false
+                    isEmoji = false
+                    keyboard = if (isKaomoji) {
+                        Keyboard(this, R.xml.keys_kaomoji)
                     } else {
                         Keyboard(this, R.xml.keys_letters)
                     }
@@ -200,14 +230,12 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
 
     override fun onPress(primaryCode: Int) {
         if (primaryCode == -5 || primaryCode == Keyboard.KEYCODE_DELETE) {
-            isDeleting = true
             deleteHandler.postDelayed(deleteRunnable, 400)
         }
     }
 
     override fun onRelease(primaryCode: Int) {
         if (primaryCode == -5 || primaryCode == Keyboard.KEYCODE_DELETE) {
-            isDeleting = false
             deleteHandler.removeCallbacks(deleteRunnable)
         }
     }
@@ -217,7 +245,6 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
         super.onDestroy()
     }
 
-    override fun onText(text: CharSequence?) {}
     override fun swipeDown() {}
     override fun swipeLeft() {}
     override fun swipeRight() {}
