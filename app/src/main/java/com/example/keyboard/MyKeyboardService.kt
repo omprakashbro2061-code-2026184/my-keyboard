@@ -9,31 +9,25 @@ import android.os.Looper
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
+import android.view.MotionEvent
 import android.view.View
 import android.view.inputmethod.EditorInfo
 import android.widget.Button
-import android.widget.GridView
 import android.widget.LinearLayout
-import android.widget.TextView
+import android.widget.ScrollView
 
 class MyKeyboardService : InputMethodService() {
 
-    private lateinit var keyboardView: View
+    private lateinit var rootView: View
     private var isCaps = false
     private var isCapsLock = false
-    private var currentMode = MODE_LETTERS
+    private var currentMode = 0
     private var vibrator: Vibrator? = null
     private var lastShiftTime = 0L
     private var lastSpaceTime = 0L
     private val deleteHandler = Handler(Looper.getMainLooper())
+    private var shiftBtn: Button? = null
     private var pasteBtn: Button? = null
-
-    companion object {
-        const val MODE_LETTERS = 0
-        const val MODE_SYMBOLS = 1
-        const val MODE_EMOJI = 2
-        const val MODE_KAOMOJI = 3
-    }
 
     private val deleteRunnable = object : Runnable {
         override fun run() {
@@ -42,6 +36,10 @@ class MyKeyboardService : InputMethodService() {
                 deleteHandler.postDelayed(this, 50)
             } catch (e: Exception) {}
         }
+    }
+
+    private fun dp(value: Int): Int {
+        return (value * resources.displayMetrics.density).toInt()
     }
 
     override fun onCreate() {
@@ -54,26 +52,23 @@ class MyKeyboardService : InputMethodService() {
                 @Suppress("DEPRECATION")
                 getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
             }
-        } catch (e: Exception) { vibrator = null }
+        } catch (e: Exception) {
+            vibrator = null
+        }
     }
 
     override fun onCreateInputView(): View {
-        keyboardView = layoutInflater.inflate(R.layout.keyboard_main, null)
-        setupKeyboard()
-        return keyboardView
+        rootView = layoutInflater.inflate(R.layout.keyboard_main, null)
+        showLetters()
+        return rootView
     }
 
     override fun onStartInputView(info: EditorInfo, restarting: Boolean) {
         super.onStartInputView(info, restarting)
-        currentMode = MODE_LETTERS
+        currentMode = 0
         isCaps = false
         isCapsLock = false
-        showLetterKeys()
-        updatePasteButton()
-    }
-
-    private fun setupKeyboard() {
-        showLetterKeys()
+        showLetters()
     }
 
     private fun vibrate() {
@@ -87,7 +82,7 @@ class MyKeyboardService : InputMethodService() {
         } catch (e: Exception) {}
     }
 
-    private fun commitText(text: String) {
+    private fun type(text: String) {
         try {
             currentInputConnection?.commitText(text, 1)
             vibrate()
@@ -97,37 +92,66 @@ class MyKeyboardService : InputMethodService() {
     private fun autoCapitalize() {
         try {
             val ic = currentInputConnection ?: return
-            val text = ic.getTextBeforeCursor(2, 0) ?: return
-            if (text.isEmpty() || text.last() in listOf('.', '!', '?')) {
+            val before = ic.getTextBeforeCursor(2, 0) ?: return
+            if (before.isEmpty() || before.last() in listOf('.', '!', '?')) {
                 isCaps = true
-                updateShiftKey()
+                shiftBtn?.text = "⇧"
             }
         } catch (e: Exception) {}
     }
 
-    private fun updateShiftKey() {
-        try {
-            val shiftBtn = keyboardView.findViewById<Button>(R.id.key_shift)
-            shiftBtn?.text = if (isCapsLock) "⇪" else if (isCaps) "⇧" else "shift"
-        } catch (e: Exception) {}
-    }
-
-    private fun updatePasteButton() {
-        try {
+    private fun checkClipboard(): Boolean {
+        return try {
             val cm = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-            val hasClip = cm.hasPrimaryClip() && (cm.primaryClip?.itemCount ?: 0) > 0
-            pasteBtn?.visibility = if (hasClip) View.VISIBLE else View.GONE
-        } catch (e: Exception) {}
+            cm.hasPrimaryClip() && (cm.primaryClip?.itemCount ?: 0) > 0
+        } catch (e: Exception) {
+            false
+        }
     }
 
-    private fun handleKey(code: String) {
+    private fun getContainer(): LinearLayout {
+        return rootView.findViewById(R.id.keyboard_container)
+    }
+
+    private fun makeBtn(
+        label: String,
+        weight: Float = 1f,
+        textSize: Float = 15f,
+        onClick: () -> Unit
+    ): Button {
+        val btn = Button(this)
+        btn.text = label
+        btn.textSize = textSize
+        btn.setTextColor(resources.getColor(R.color.key_text, null))
+        btn.background = resources.getDrawable(R.drawable.key_background, null)
+        btn.setPadding(0, 0, 0, 0)
+        val p = LinearLayout.LayoutParams(0, dp(46), weight)
+        p.setMargins(dp(2), dp(3), dp(2), dp(3))
+        btn.layoutParams = p
+        btn.setOnClickListener { onClick() }
+        return btn
+    }
+
+    private fun makeRow(margin: Int = 4): LinearLayout {
+        val row = LinearLayout(this)
+        row.orientation = LinearLayout.HORIZONTAL
+        val p = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        )
+        p.setMargins(dp(margin), 0, dp(margin), 0)
+        row.layoutParams = p
+        return row
+    }
+
+    private fun handle(code: String) {
         try {
             val ic = currentInputConnection ?: return
             vibrate()
             when (code) {
                 "DEL" -> {
-                    val selected = ic.getSelectedText(0)
-                    if (!selected.isNullOrEmpty()) ic.commitText("", 1)
+                    val sel = ic.getSelectedText(0)
+                    if (!sel.isNullOrEmpty()) ic.commitText("", 1)
                     else ic.deleteSurroundingText(1, 0)
                 }
                 "SHIFT" -> {
@@ -135,12 +159,14 @@ class MyKeyboardService : InputMethodService() {
                     if (now - lastShiftTime < 300) {
                         isCapsLock = !isCapsLock
                         isCaps = isCapsLock
+                        shiftBtn?.text = if (isCapsLock) "⇪" else "shift"
                     } else {
-                        if (!isCapsLock) isCaps = !isCaps
+                        if (!isCapsLock) {
+                            isCaps = !isCaps
+                            shiftBtn?.text = if (isCaps) "⇧" else "shift"
+                        }
                     }
                     lastShiftTime = now
-                    updateShiftKey()
-                    refreshLetterKeys()
                 }
                 "ENTER" -> {
                     val action = currentInputEditorInfo?.imeOptions?.and(EditorInfo.IME_MASK_ACTION)
@@ -156,7 +182,7 @@ class MyKeyboardService : InputMethodService() {
                         ic.deleteSurroundingText(1, 0)
                         ic.commitText(". ", 1)
                         isCaps = true
-                        updateShiftKey()
+                        shiftBtn?.text = "⇧"
                     } else {
                         ic.commitText(" ", 1)
                         autoCapitalize()
@@ -169,19 +195,16 @@ class MyKeyboardService : InputMethodService() {
                     ic.commitText(text, 1)
                     vibrate()
                 }
-                "SYM" -> { currentMode = MODE_SYMBOLS; showSymbolKeys() }
-                "ABC" -> { currentMode = MODE_LETTERS; showLetterKeys() }
-                "EMO" -> { currentMode = MODE_EMOJI; showEmojiKeys() }
-                "KAO" -> { currentMode = MODE_KAOMOJI; showKaomojiKeys() }
+                "SYM" -> showSymbols()
+                "ABC" -> showLetters()
+                "EMO" -> showEmoji()
+                "KAO" -> showKaomoji()
                 else -> {
-                    val char = if ((isCaps || isCapsLock) && code.length == 1 && code[0].isLetter()) {
-                        code.uppercase()
-                    } else code
-                    ic.commitText(char, 1)
+                    val out = if ((isCaps || isCapsLock) && code.length == 1 && code[0].isLetter()) code.uppercase() else code
+                    ic.commitText(out, 1)
                     if (isCaps && !isCapsLock) {
                         isCaps = false
-                        updateShiftKey()
-                        refreshLetterKeys()
+                        shiftBtn?.text = "shift"
                     }
                     autoCapitalize()
                 }
@@ -189,146 +212,117 @@ class MyKeyboardService : InputMethodService() {
         } catch (e: Exception) {}
     }
 
-    private fun makeKey(label: String, code: String, weight: Float = 1f): Button {
-        val btn = Button(this)
-        btn.text = label
-        btn.textSize = 16f
-        btn.setTextColor(resources.getColor(R.color.key_text, null))
-        btn.background = resources.getDrawable(R.drawable.key_background, null)
-        val params = LinearLayout.LayoutParams(0, dpToPx(46), weight)
-        params.setMargins(dpToPx(2), dpToPx(3), dpToPx(2), dpToPx(3))
-        btn.layoutParams = params
-        btn.setPadding(0, 0, 0, 0)
-        btn.setOnClickListener { handleKey(code) }
-        if (code == "DEL") {
-            btn.setOnLongClickListener {
-                deleteHandler.postDelayed(deleteRunnable, 400)
-                true
+    private fun delBtn(): Button {
+        val btn = makeBtn("⌫", 1.5f) { handle("DEL") }
+        btn.setOnTouchListener { _, event ->
+            when (event.action) {
+                MotionEvent.ACTION_DOWN -> deleteHandler.postDelayed(deleteRunnable, 500)
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> deleteHandler.removeCallbacks(deleteRunnable)
             }
-            btn.setOnTouchListener { _, event ->
-                if (event.action == android.view.MotionEvent.ACTION_UP) {
-                    deleteHandler.removeCallbacks(deleteRunnable)
-                }
-                false
-            }
+            false
         }
         return btn
     }
 
-    private fun makeRow(vararg keys: Pair<String, String>, weights: FloatArray? = null): LinearLayout {
-        val row = LinearLayout(this)
-        row.orientation = LinearLayout.HORIZONTAL
-        val rowParams = LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT,
-            LinearLayout.LayoutParams.WRAP_CONTENT
-        )
-        rowParams.setMargins(dpToPx(4), 0, dpToPx(4), 0)
-        row.layoutParams = rowParams
-        keys.forEachIndexed { i, (label, code) ->
-            val w = weights?.getOrNull(i) ?: 1f
-            row.addView(makeKey(label, code, w))
-        }
+    private fun bottomRow(leftLabel: String, leftCode: String): LinearLayout {
+        val row = makeRow(4)
+        val lp = row.layoutParams as LinearLayout.LayoutParams
+        lp.setMargins(dp(4), 0, dp(4), dp(4))
+        row.layoutParams = lp
+
+        val left = makeBtn(leftLabel, 1.5f) { handle(leftCode) }
+
+        pasteBtn = makeBtn("pst", 1f) { handle("PASTE") }
+        pasteBtn?.visibility = if (checkClipboard()) View.VISIBLE else View.GONE
+
+        val space = makeBtn("space", 4f) { handle("SPACE") }
+        val dot = makeBtn(".", 0.7f) { handle(".") }
+        val enter = makeBtn("↵", 1.5f) { handle("ENTER") }
+
+        row.addView(left)
+        row.addView(pasteBtn)
+        row.addView(space)
+        row.addView(dot)
+        row.addView(enter)
         return row
     }
 
-    private fun showLetterKeys() {
-        val container = keyboardView.findViewById<LinearLayout>(R.id.keyboard_container)
-        container.removeAllViews()
+    private fun showLetters() {
+        currentMode = 0
+        val c = getContainer()
+        c.removeAllViews()
 
-        val row1 = makeRow("q" to "q", "w" to "w", "e" to "e", "r" to "r", "t" to "t", "y" to "y", "u" to "u", "i" to "i", "o" to "o", "p" to "p")
-
-        val row2 = LinearLayout(this)
-        row2.orientation = LinearLayout.HORIZONTAL
-        val r2p = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
-        r2p.setMargins(dpToPx(20), 0, dpToPx(20), 0)
-        row2.layoutParams = r2p
-        listOf("a","s","d","f","g","h","j","k","l").forEach { c ->
-            row2.addView(makeKey(c, c))
+        val r1 = makeRow()
+        listOf("q","w","e","r","t","y","u","i","o","p").forEach { key ->
+            r1.addView(makeBtn(key) { handle(key) })
         }
 
-        val row3 = makeRow(
-            "shift" to "SHIFT", "z" to "z", "x" to "x", "c" to "c", "v" to "v", "b" to "b", "n" to "n", "m" to "m", "del" to "DEL",
-            weights = floatArrayOf(1.5f, 1f, 1f, 1f, 1f, 1f, 1f, 1f, 1.5f)
-        )
+        val r2 = makeRow(20)
+        listOf("a","s","d","f","g","h","j","k","l").forEach { key ->
+            r2.addView(makeBtn(key) { handle(key) })
+        }
 
-        val row4 = LinearLayout(this)
-        row4.orientation = LinearLayout.HORIZONTAL
-        val r4p = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
-        r4p.setMargins(dpToPx(4), 0, dpToPx(4), dpToPx(4))
-        row4.layoutParams = r4p
+        val r3 = makeRow()
+        shiftBtn = makeBtn("shift", 1.5f) { handle("SHIFT") }
+        r3.addView(shiftBtn)
+        listOf("z","x","c","v","b","n","m").forEach { key ->
+            r3.addView(makeBtn(key) { handle(key) })
+        }
+        r3.addView(delBtn())
 
-        val sym = makeKey("123", "SYM", 1.2f)
-        val emo = makeKey("☺", "EMO", 1f)
-        val kao = makeKey("(^)", "KAO", 1f)
-        pasteBtn = makeKey("pst", "PASTE", 1f)
-        pasteBtn?.visibility = View.GONE
-        val space = makeKey("space", "SPACE", 4f)
-        val dot = makeKey(".", ".", 0.8f)
-        val enter = makeKey("enter", "ENTER", 1.5f)
+        val r4 = makeRow(4)
+        val lp4 = r4.layoutParams as LinearLayout.LayoutParams
+        lp4.setMargins(dp(4), 0, dp(4), dp(4))
+        r4.layoutParams = lp4
 
-        row4.addView(sym)
-        row4.addView(emo)
-        row4.addView(kao)
-        row4.addView(pasteBtn)
-        row4.addView(space)
-        row4.addView(dot)
-        row4.addView(enter)
+        val sym = makeBtn("123", 1.2f) { handle("SYM") }
+        val emo = makeBtn("☺", 1f) { handle("EMO") }
+        val kao = makeBtn("(^)", 1f) { handle("KAO") }
+        pasteBtn = makeBtn("pst", 1f) { handle("PASTE") }
+        pasteBtn?.visibility = if (checkClipboard()) View.VISIBLE else View.GONE
+        val space = makeBtn("space", 4f) { handle("SPACE") }
+        val dot = makeBtn(".", 0.7f) { handle(".") }
+        val enter = makeBtn("↵", 1.5f) { handle("ENTER") }
 
-        container.addView(row1)
-        container.addView(row2)
-        container.addView(row3)
-        container.addView(row4)
+        r4.addView(sym)
+        r4.addView(emo)
+        r4.addView(kao)
+        r4.addView(pasteBtn)
+        r4.addView(space)
+        r4.addView(dot)
+        r4.addView(enter)
 
-        updateShiftKey()
-        updatePasteButton()
+        c.addView(r1)
+        c.addView(r2)
+        c.addView(r3)
+        c.addView(r4)
     }
 
-    private fun refreshLetterKeys() {
-        if (currentMode == MODE_LETTERS) showLetterKeys()
+    private fun showSymbols() {
+        currentMode = 1
+        val c = getContainer()
+        c.removeAllViews()
+
+        val r1 = makeRow()
+        listOf("1","2","3","4","5","6","7","8","9","0").forEach { k -> r1.addView(makeBtn(k) { handle(k) }) }
+
+        val r2 = makeRow()
+        listOf("@","#","$","%","&","*","(",")","−","+").forEach { k -> r2.addView(makeBtn(k) { handle(k) }) }
+
+        val r3 = makeRow()
+        listOf("!","\"","'",":",";","/","?","=").forEach { k -> r3.addView(makeBtn(k) { handle(k) }) }
+        r3.addView(delBtn())
+
+        c.addView(r1)
+        c.addView(r2)
+        c.addView(r3)
+        c.addView(bottomRow("ABC", "ABC"))
     }
 
-    private fun showSymbolKeys() {
-        val container = keyboardView.findViewById<LinearLayout>(R.id.keyboard_container)
-        container.removeAllViews()
-
-        val row1 = makeRow("1" to "1","2" to "2","3" to "3","4" to "4","5" to "5","6" to "6","7" to "7","8" to "8","9" to "9","0" to "0")
-        val row2 = makeRow("@" to "@","#" to "#","$" to "$","%" to "%","&" to "&","*" to "*","(" to "(",")" to ")","−" to "-","+" to "+")
-        val row3 = makeRow("!" to "!","\"" to "\"","'" to "'",":" to ":",";" to ";","/" to "/","?" to "?","=" to "=","⌫" to "DEL",
-            weights = floatArrayOf(1f,1f,1f,1f,1f,1f,1f,1f,1.5f))
-
-        val row4 = LinearLayout(this)
-        row4.orientation = LinearLayout.HORIZONTAL
-        val r4p = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
-        r4p.setMargins(dpToPx(4), 0, dpToPx(4), dpToPx(4))
-        row4.layoutParams = r4p
-
-        pasteBtn = makeKey("pst", "PASTE", 1f)
-        pasteBtn?.visibility = View.GONE
-        row4.addView(makeKey("ABC", "ABC", 1.5f))
-        row4.addView(pasteBtn)
-        row4.addView(makeKey("space", "SPACE", 4f))
-        row4.addView(makeKey(".", ".", 0.8f))
-        row4.addView(makeKey("enter", "ENTER", 1.5f))
-
-        container.addView(row1)
-        container.addView(row2)
-        container.addView(row3)
-        container.addView(row4)
-
-        updatePasteButton()
-    }
-
-    private fun showEmojiKeys() {
-        val container = keyboardView.findViewById<LinearLayout>(R.id.keyboard_container)
-        container.removeAllViews()
-
-        val scroll = android.widget.ScrollView(this)
-        scroll.layoutParams = LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(200)
-        )
-
-        val inner = LinearLayout(this)
-        inner.orientation = LinearLayout.VERTICAL
+    private fun showEmoji() {
+        currentMode = 2
+        val c = getContainer()
+        c.removeAllViews()
 
         val emojis = listOf(
             "😂","🤣","😭","😍","🥰","😘","😊","😇",
@@ -336,25 +330,21 @@ class MyKeyboardService : InputMethodService() {
             "❤️","💖","💕","💞","💝","🧡","💛","💚",
             "✨","🌹","🌸","🌺","🍀","🌙","⭐","🔥",
             "💪","👊","🤝","🙏","👍","👌","🫂","🤗",
-            "🐐","🗿","📚","🎀","💃","🍻","🏠","🎵"
+            "🐐","🗿","📚","🎀","💃","🍻","🏠","🎵",
+            "😀","😃","😄","😆","😋","🤭","🫶","💅"
         )
 
+        val scroll = ScrollView(this)
+        val slp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(200))
+        scroll.layoutParams = slp
+
+        val inner = LinearLayout(this)
+        inner.orientation = LinearLayout.VERTICAL
+
         emojis.chunked(8).forEach { chunk ->
-            val row = LinearLayout(this)
-            row.orientation = LinearLayout.HORIZONTAL
-            val rp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
-            rp.setMargins(dpToPx(4), 0, dpToPx(4), 0)
-            row.layoutParams = rp
+            val row = makeRow(4)
             chunk.forEach { emoji ->
-                val btn = Button(this)
-                btn.text = emoji
-                btn.textSize = 20f
-                btn.background = resources.getDrawable(R.drawable.key_background, null)
-                val bp = LinearLayout.LayoutParams(0, dpToPx(48), 1f)
-                bp.setMargins(dpToPx(2), dpToPx(2), dpToPx(2), dpToPx(2))
-                btn.layoutParams = bp
-                btn.setPadding(0, 0, 0, 0)
-                btn.setOnClickListener { commitText(emoji) }
+                val btn = makeBtn(emoji, 1f, 20f) { type(emoji) }
                 row.addView(btn)
             }
             inner.addView(row)
@@ -362,39 +352,31 @@ class MyKeyboardService : InputMethodService() {
 
         scroll.addView(inner)
 
-        val bottomRow = LinearLayout(this)
-        bottomRow.orientation = LinearLayout.HORIZONTAL
-        val bp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
-        bp.setMargins(dpToPx(4), 0, dpToPx(4), dpToPx(4))
-        bottomRow.layoutParams = bp
-        bottomRow.addView(makeKey("ABC", "ABC", 1f))
-        bottomRow.addView(makeKey("space", "SPACE", 3f))
-        bottomRow.addView(makeKey("del", "DEL", 1f))
-        bottomRow.addView(makeKey("enter", "ENTER", 1f))
+        val bot = makeRow(4)
+        val blp = bot.layoutParams as LinearLayout.LayoutParams
+        blp.setMargins(dp(4), 0, dp(4), dp(4))
+        bot.layoutParams = blp
+        bot.addView(makeBtn("ABC", 1f) { handle("ABC") })
+        bot.addView(makeBtn("space", 3f) { handle("SPACE") })
+        bot.addView(delBtn())
+        bot.addView(makeBtn("↵", 1f) { handle("ENTER") })
 
-        container.addView(scroll)
-        container.addView(bottomRow)
+        c.addView(scroll)
+        c.addView(bot)
     }
 
-    private fun showKaomojiKeys() {
-        val container = keyboardView.findViewById<LinearLayout>(R.id.keyboard_container)
-        container.removeAllViews()
+    private fun showKaomoji() {
+        currentMode = 3
+        val c = getContainer()
+        c.removeAllViews()
 
-        val scroll = android.widget.ScrollView(this)
-        scroll.layoutParams = LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.MATCH_PARENT, dpToPx(200)
-        )
-
-        val inner = LinearLayout(this)
-        inner.orientation = LinearLayout.VERTICAL
-
-        val kaoList = listOf(
+        val list = listOf(
             "(❤‿❤)" to "(❤‿❤)",
             "(｡♥‿♥｡)" to "(｡♥‿♥｡)",
             "(づ◕‿◕)づ" to "(づ◕‿◕)づ",
             "( ˘³˘)♥" to "( ˘³˘)♥",
             "(づ￣³￣)づ" to "(づ￣³￣)づ",
-            "(´｡•ᵕ•｡`)♡" to "(´｡•ᵕ•｡`)♡",
+            "(´•ᵕ•`)♡" to "(´｡•ᵕ•｡`)♡",
             "(＾▽＾)" to "(＾▽＾)",
             "(≧◡≦)" to "(≧◡≦)",
             "(⌒‿⌒)" to "(⌒‿⌒)",
@@ -405,37 +387,31 @@ class MyKeyboardService : InputMethodService() {
             "(ಥ﹏ಥ)" to "(ಥ﹏ಥ)",
             "(T_T)" to "(T_T)",
             "(；＿；)" to "(；＿；)",
-            "(｡•́︿•̀｡)" to "(｡•́︿•̀｡)",
-            "( ͡°ʖ ͡°)" to "( ͡° ͜ʖ ͡°)",
+            "lenny" to "( ͡° ͜ʖ ͡°)",
             "(¬‿¬)" to "(¬‿¬)",
             "(ಠ_ಠ)" to "(ಠ_ಠ)",
-            "(ノಠ益ಠ)ノ彡┻━┻" to "(ノಠ益ಠ)ノ彡┻━┻",
-            "(ง°ل°)ง" to "(ง ͠° ͟ل͜ ͡°)ง",
-            "(☞ʖ☞)" to "(☞ ͡° ͜ʖ ͡°)☞",
-            "(つ≧▽≦)つ" to "(つ≧▽≦)つ",
+            "flip" to "(ノಠ益ಠ)ノ彡┻━┻",
+            "hug" to "(つ≧▽≦)つ",
             "(〃ω〃)" to "(〃ω〃)",
             "<3" to "<3",
-            "✧ﾟ✧" to "✧･ﾟ:✧･ﾟ:",
-            "(⌐■■)" to "(⌐■■)"
+            "✧ﾟ" to "✧･ﾟ:✧･ﾟ:",
+            "(⌐■■)" to "(⌐■■)",
+            "☞ʖ☞" to "(☞ ͡° ͜ʖ ͡°)☞",
+            "ง°ง" to "(ง ͠° ͟ل͜ ͡°)ง",
+            "(ಠ‿ಠ)" to "(ಠ‿ಠ)"
         )
 
-        kaoList.chunked(3).forEach { chunk ->
-            val row = LinearLayout(this)
-            row.orientation = LinearLayout.HORIZONTAL
-            val rp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
-            rp.setMargins(dpToPx(4), 0, dpToPx(4), 0)
-            row.layoutParams = rp
+        val scroll = ScrollView(this)
+        val slp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(200))
+        scroll.layoutParams = slp
+
+        val inner = LinearLayout(this)
+        inner.orientation = LinearLayout.VERTICAL
+
+        list.chunked(3).forEach { chunk ->
+            val row = makeRow(4)
             chunk.forEach { (label, output) ->
-                val btn = Button(this)
-                btn.text = label
-                btn.textSize = 11f
-                btn.setTextColor(resources.getColor(R.color.key_text, null))
-                btn.background = resources.getDrawable(R.drawable.key_background, null)
-                val bp = LinearLayout.LayoutParams(0, dpToPx(46), 1f)
-                bp.setMargins(dpToPx(2), dpToPx(2), dpToPx(2), dpToPx(2))
-                btn.layoutParams = bp
-                btn.setPadding(dpToPx(2), 0, dpToPx(2), 0)
-                btn.setOnClickListener { commitText(output) }
+                val btn = makeBtn(label, 1f, 11f) { type(output) }
                 row.addView(btn)
             }
             inner.addView(row)
@@ -443,7 +419,21 @@ class MyKeyboardService : InputMethodService() {
 
         scroll.addView(inner)
 
-        val bottomRow = LinearLayout(this)
-        bottomRow.orientation = LinearLayout.HORIZONTAL
-        val bp = LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT)
-        bp.setMargins(dpToPx(4), 0, dpToPx(4)
+        val bot = makeRow(4)
+        val blp = bot.layoutParams as LinearLayout.LayoutParams
+        blp.setMargins(dp(4), 0, dp(4), dp(4))
+        bot.layoutParams = blp
+        bot.addView(makeBtn("ABC", 1f) { handle("ABC") })
+        bot.addView(makeBtn("space", 3f) { handle("SPACE") })
+        bot.addView(delBtn())
+        bot.addView(makeBtn("↵", 1f) { handle("ENTER") })
+
+        c.addView(scroll)
+        c.addView(bot)
+    }
+
+    override fun onDestroy() {
+        deleteHandler.removeCallbacks(deleteRunnable)
+        super.onDestroy()
+    }
+}
