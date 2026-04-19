@@ -1,5 +1,6 @@
 package com.example.keyboard
 
+import android.content.ClipboardManager
 import android.content.Context
 import android.inputmethodservice.InputMethodService
 import android.inputmethodservice.Keyboard
@@ -10,7 +11,6 @@ import android.os.Looper
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
-import android.text.InputType
 import android.view.View
 import android.view.inputmethod.EditorInfo
 
@@ -78,7 +78,9 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
     private fun vibrate() {
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                vibrator?.vibrate(VibrationEffect.createOneShot(25, VibrationEffect.DEFAULT_AMPLITUDE))
+                vibrator?.vibrate(
+                    VibrationEffect.createOneShot(25, VibrationEffect.DEFAULT_AMPLITUDE)
+                )
             } else {
                 @Suppress("DEPRECATION")
                 vibrator?.vibrate(25)
@@ -96,8 +98,7 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
                 keyboardView.invalidateAllKeys()
                 return
             }
-            val last = text.last()
-            if (last == '.' || last == '!' || last == '?') {
+            if (text.last() in listOf('.', '!', '?')) {
                 isCaps = true
                 keyboard.isShifted = true
                 keyboardView.invalidateAllKeys()
@@ -105,12 +106,21 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
         } catch (e: Exception) {}
     }
 
-    private fun switchToLetters() {
-        isSymbols = false
-        isEmoji = false
-        isKaomoji = false
-        keyboard = Keyboard(this, R.xml.keys_letters)
-        keyboardView.keyboard = keyboard
+    private fun hasClipboard(): Boolean {
+        return try {
+            val cm = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+            cm.hasPrimaryClip() && cm.primaryClip!!.itemCount > 0
+        } catch (e: Exception) { false }
+    }
+
+    private fun pasteFromClipboard() {
+        try {
+            if (!hasClipboard()) return
+            val cm = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+            val text = cm.primaryClip?.getItemAt(0)?.coerceToText(this) ?: return
+            currentInputConnection?.commitText(text, 1)
+            vibrate()
+        } catch (e: Exception) {}
     }
 
     override fun onText(text: CharSequence?) {
@@ -129,6 +139,11 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
             vibrate()
 
             when (primaryCode) {
+
+                -10 -> {
+                    // handled by onText via keyOutputText
+                }
+
                 -5, Keyboard.KEYCODE_DELETE -> {
                     val selected = ic.getSelectedText(0)
                     if (!selected.isNullOrEmpty()) {
@@ -152,8 +167,13 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
                 }
 
                 10 -> {
-                    val action = currentInputEditorInfo?.imeOptions?.and(EditorInfo.IME_MASK_ACTION)
-                    if (action != null && action != EditorInfo.IME_ACTION_NONE && action != EditorInfo.IME_ACTION_UNSPECIFIED) {
+                    val action = currentInputEditorInfo
+                        ?.imeOptions
+                        ?.and(EditorInfo.IME_MASK_ACTION)
+                    if (action != null
+                        && action != EditorInfo.IME_ACTION_NONE
+                        && action != EditorInfo.IME_ACTION_UNSPECIFIED
+                    ) {
                         ic.performEditorAction(action)
                     } else {
                         ic.commitText("\n", 1)
@@ -209,6 +229,10 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
                         Keyboard(this, R.xml.keys_letters)
                     }
                     keyboardView.keyboard = keyboard
+                }
+
+                100800 -> {
+                    pasteFromClipboard()
                 }
 
                 else -> {
