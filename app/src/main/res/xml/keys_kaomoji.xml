@@ -1,22 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Keyboard xmlns:android="http://schemas.android.com/apk/res/android"
     android:keyWidth="25%p"
-    android:keyHeight="52dp"
+    android:keyHeight="48dp"
     android:horizontalGap="3dp"
     android:verticalGap="6dp">
 
     <Row>
-        <Key android:codes="-10" android:keyOutputText="(❤️‿❤️)" android:keyLabel="❤️‿❤️" android:keyEdgeFlags="left"/>
-        <Key android:codes="-10" android:keyOutputText="(｡♥‿♥｡)" android:keyLabel="♥‿♥"/>
-        <Key android:codes="-10" android:keyOutputText="(づ｡◕‿‿◕｡)づ" android:keyLabel="づ◕‿◕"/>
-        <Key android:codes="-5" android:keyLabel="⌫" android:keyEdgeFlags="right"/>
-    </Row>
-
-    <Row>
-        <Key android:codes="-10" android:keyOutputText="( ˘ ³˘)♥" android:keyLabel="˘³˘♥" android:keyEdgeFlags="left"/>
-        <Key android:codes="-10" android:keyOutputText="(づ￣ ³￣)づ" android:keyLabel="づ³づ"/>
-        <Key android:codes="-10" android:keyOutputText="(´｡• ᵕ •｡`) ♡" android:keyLabel="•ᵕ•♡"/>
-        <Key android:codes="-10" android:keyOutputText="(っ◔◡◔)っ ♥" android:keyLabel="◔◡◔♥" android:keyEdgeFlags="right"/>
+        <Key android:codes="-10" android:keyOutputText="(❤‿❤)" android:keyLabel="❤‿❤" android:keyEdgeFlags="left"/>
+        <Key android:codes="-10" android:keyOutputText="(づ◕‿◕)づ" android:keyLabel="づ◕‿◕"/>
+        <Key android:codes="-10" android:keyOutputText="( ˘³˘)♥" android:keyLabel="˘³♥"/>
+        <Key android:codes="-5" android:keyLabel="del" android:keyEdgeFlags="right"/>
     </Row>
 
     <Row>
@@ -30,34 +23,20 @@
         <Key android:codes="-10" android:keyOutputText="(╥﹏╥)" android:keyLabel="╥﹏╥" android:keyEdgeFlags="left"/>
         <Key android:codes="-10" android:keyOutputText="(ಥ﹏ಥ)" android:keyLabel="ಥ﹏ಥ"/>
         <Key android:codes="-10" android:keyOutputText="(T_T)" android:keyLabel="T_T"/>
-        <Key android:codes="-10" android:keyOutputText="(｡•́︿•̀｡)" android:keyLabel="•́︿•̀" android:keyEdgeFlags="right"/>
+        <Key android:codes="-10" android:keyOutputText="(；＿；)" android:keyLabel="；＿；" android:keyEdgeFlags="right"/>
     </Row>
 
     <Row>
-        <Key android:codes="-10" android:keyOutputText="( ͡° ͜ʖ ͡°)" android:keyLabel="͡°ʖ͡°" android:keyEdgeFlags="left"/>
-        <Key android:codes="-10" android:keyOutputText="(¬‿¬)" android:keyLabel="¬‿¬"/>
+        <Key android:codes="-10" android:keyOutputText="( ͡° ͜ʖ ͡°)" android:keyLabel="lenny" android:keyEdgeFlags="left"/>
         <Key android:codes="-10" android:keyOutputText="(ಠ_ಠ)" android:keyLabel="ಠ_ಠ"/>
-        <Key android:codes="-10" android:keyOutputText="(ಠ‿ಠ)" android:keyLabel="ಠ‿ಠ" android:keyEdgeFlags="right"/>
+        <Key android:codes="-10" android:keyOutputText="(ノಠ益ಠ)ノ彡┻━┻" android:keyLabel="flip"/>
+        <Key android:codes="-10" android:keyOutputText="(つ≧▽≦)つ" android:keyLabel="hug" android:keyEdgeFlags="right"/>
     </Row>
 
     <Row>
-        <Key android:codes="-10" android:keyOutputText="(ノಠ益ಠ)ノ彡┻━┻" android:keyLabel="ノಠ益ಠ" android:keyEdgeFlags="left"/>
-        <Key android:codes="-10" android:keyOutputText="(☞ ͡° ͜ʖ ͡°)☞" android:keyLabel="☞ʖ☞"/>
-        <Key android:codes="-10" android:keyOutputText="(ง ͠° ͟ل͜ ͡°)ง" android:keyLabel="ง°ل°ง"/>
-        <Key android:codes="-10" android:keyOutputText="✧･ﾟ:✧･ﾟ:" android:keyLabel="✧ﾟ✧" android:keyEdgeFlags="right"/>
-    </Row>
-
-    <Row>
-        <Key android:codes="-10" android:keyOutputText="(つ≧▽≦)つ" android:keyLabel="つ≧▽≦" android:keyEdgeFlags="left"/>
-        <Key android:codes="-10" android:keyOutputText="(〃ω〃)" android:keyLabel="〃ω〃"/>
-        <Key android:codes="-10" android:keyOutputText="&lt;3" android:keyLabel="&lt;3"/>
-        <Key android:codes="-10" android:keyOutputText="(⌐■■)" android:keyLabel="⌐■■" android:keyEdgeFlags="right"/>
-    </Row>
-
-    <Row>
-        <Key android:codes="100700" android:keyLabel="ABC" android:keyWidth="25%p" android:keyEdgeFlags="left"/>
+        <Key android:codes="100700" android:keyLabel="back" android:keyWidth="25%p" android:keyEdgeFlags="left"/>
         <Key android:codes="32" android:keyLabel="space" android:keyWidth="50%p"/>
-        <Key android:codes="10" android:keyLabel="return" android:keyWidth="25%p" android:keyEdgeFlags="right"/>
+        <Key android:codes="10" android:keyLabel="enter" android:keyWidth="25%p" android:keyEdgeFlags="right"/>
     </Row>
 
 </Keyboard>
