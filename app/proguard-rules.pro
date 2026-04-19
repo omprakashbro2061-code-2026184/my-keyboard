@@ -1,0 +1,4 @@
+-keep class com.example.keyboard.** { *; }
+-keep class android.inputmethodservice.** { *; }
+-keepattributes *Annotation*
+-dontwarn android.inputmethodservice.**
